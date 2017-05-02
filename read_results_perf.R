@@ -1,4 +1,4 @@
-setwd("~/Desktop/Parallel-Computing")
+setwd("~/GitProjects/MAC5742-EP1")
 library("ggplot2")
 
 seq_full = read.table("./results_perf/mandelbrot_seq/full.log", header = FALSE, sep = "\t", stringsAsFactors = FALSE)
@@ -33,7 +33,6 @@ fulldata = rbind(
 )
 
 names(fulldata) <- "output_line" 
-
 results <- split(fulldata, f = rep(1:(nrow(fulldata)/16), each = 16))
 
 read_result <- function(df) {
@@ -68,11 +67,6 @@ read_result <- function(df) {
   context_switches <- as.numeric(gsub(",", "", output[[3]][1]))
   cpu_migrations <- as.numeric(gsub(",", "", output[[4]][1]))
   page_faults <- as.numeric(gsub(",", "", output[[5]][1]))
-  cycles <- as.numeric(gsub(",", "", output[[6]][1]))
-  stalled_cycles_frontend <- as.numeric(gsub(",", "", output[[7]][1]))
-  instructions <- as.numeric(gsub(",", "", output[[8]][1]))
-  branches <- as.numeric(gsub(",", "", output[[10]][1]))
-  branches_misses <- as.numeric(gsub(",", "", output[[11]][1]))
   time_elapsed <- as.numeric(gsub(",", "", output[[16]][1]))
   
   results <- data.frame(
@@ -85,17 +79,58 @@ read_result <- function(df) {
     context_switches = context_switches,
     cpu_migrations = cpu_migrations,
     page_faults = page_faults,
-    cycles = {if(cycles == 0) NA else cycles},
-    stalled_cycles_frontend = stalled_cycles_frontend,
-    instructions = instructions,
-    branches = branches,
-    branches_misses = branches_misses,
     time_elapsed = time_elapsed
   )
   
 }
 
 results <- do.call("rbind", lapply(results, read_result))
+
+plots <- list()
+current_plot <- 1
+
+sizes <- unique(results$imsize)
+for (s in sizes) {
+  df <- results[results$imsize == s & results$iomode == "withoutIO",]
+  plots[[current_plot]] <- list()
+  plots[[current_plot]][["fig"]] <- ggplot(data = df, 
+                                           aes(x = as.factor(nthreads), y = time_elapsed, color = algorithm)) +
+    geom_boxplot() +
+    facet_wrap(~image, scales = "free") +
+    ggtitle("Tempo de Execução x Número de Threads", 
+            subtitle = sprintf("Tamanho da imagem: %s (Sem I/O)", s)) +
+    xlab("Número de threads") +
+    ylab("Tempo de execução (s)") +
+    guides(color = guide_legend(title="Implementação")) +
+    theme(plot.title = element_text(hjust = 0.5, vjust = 5, size = 20),
+          plot.subtitle = element_text(hjust = 0.5, size = 14, vjust = 5),
+          strip.text = element_text(size= 16),
+          axis.title = element_text(size = 16),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 12),
+          axis.title.y=element_text(vjust=5),
+          axis.title.x=element_text(vjust=-65),
+          plot.margin = unit(c(1,1,1,1), "cm"))
+  plots[[current_plot]][["filename"]] <- sprintf("BoxplotSize%s.pdf", s)
+  current_plot <- current_plot + 1
+}
+
+for (p in plots) {
+  pdf(paste("./plots/", p[["filename"]], sep = ""), width = 16, height = 9)
+  print(p)
+  dev.off()
+}
+
+write.csv(results, file = "./results_perf/results.csv")
+
+
+
+
+
+
+
+
 
 
 size8192 = results[results$imsize == 8192 & results$iomode == "withoutIO",]
